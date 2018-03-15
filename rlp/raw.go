@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// 未解码的RLP数据
+
 package rlp
 
 import (
@@ -22,8 +24,11 @@ import (
 )
 
 // RawValue represents an encoded RLP value and can be used to delay
+// RawValue表示一个编码的RLP值，可用于延迟
 // RLP decoding or to precompute an encoding. Note that the decoder does
+// RLP解码或预先计算编码。 请注意，解码器
 // not verify whether the content of RawValues is valid RLP.
+// 不验证RawValues的内容是否为有效的RLP。
 type RawValue []byte
 
 var rawValueType = reflect.TypeOf(RawValue{})

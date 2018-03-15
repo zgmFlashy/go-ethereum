@@ -24,60 +24,106 @@ import (
 	"sync"
 )
 
+// 首先定义了空字符串和空List的值，分别是 0x80和0xC0。
+// 注意，整形的0值的对应值也是0x80。
+// 这个在黄皮书上面是没有看到有定义的。
+// 然后定义了一个接口类型给别的类型实现 EncodeRLP
+
 var (
 	// Common encoded values.
+	//常用编码值。
 	// These are useful when implementing EncodeRLP.
+	//这些在实现EncodeRLP时很有用。
 	EmptyString = []byte{0x80}
 	EmptyList   = []byte{0xC0}
 )
 
 // Encoder is implemented by types that require custom
+//编码器是通过需要自定义的类型实现的
 // encoding rules or want to encode private fields.
+//编码规则或想要编码专用字段。
 type Encoder interface {
 	// EncodeRLP should write the RLP encoding of its receiver to w.
+	//编码RLP应该将其接收器的RLP编码写入w。
 	// If the implementation is a pointer method, it may also be
+	//如果实现是一个指针方法，它也可能是
 	// called for nil pointers.
+	//调用nil指针。
 	//
 	// Implementations should generate valid RLP. The data written is
+	//实现应该生成有效的RLP。 写的数据是
 	// not verified at the moment, but a future version might. It is
+	//目前尚未验证，但未来的版本可能会。 它是
 	// recommended to write only a single value but writing multiple
+	//建议只写一个值，但写入多个
 	// values or no value at all is also permitted.
+	//值或根本没有值也是允许的。
+
 	EncodeRLP(io.Writer) error
 }
 
 // Encode writes the RLP encoding of val to w. Note that Encode may
+//编码将val的RLP编码写入w。请注意，编码可能
 // perform many small writes in some cases. Consider making w
+//在某些情况下执行很多小写操作。考虑让w
 // buffered.
+// 缓冲的。
 //
 // Encode uses the following type-dependent encoding rules:
+// Encode使用以下依赖于类型的编码规则：
 //
 // If the type implements the Encoder interface, Encode calls
+//如果类型实现编码器接口，则编码调用
 // EncodeRLP. This is true even for nil pointers, please see the
+//编码RLP。即使是零指针也是如此，请参阅
 // documentation for Encoder.
+//编码器的文档。
 //
 // To encode a pointer, the value being pointed to is encoded. For nil
+//要编码一个指针，指向的值被编码。为零
 // pointers, Encode will encode the zero value of the type. A nil
+//指针，Encode将编码该类型的零值。一个零
 // pointer to a struct type always encodes as an empty RLP list.
+//指向结构类型的指针始终编码为空的RLP列表。
 // A nil pointer to an array encodes as an empty list (or empty string
+//指向数组的零指针将编码为空列表（或空字符串）
 // if the array has element type byte).
+//如果数组具有元素类型字节）。
 //
 // Struct values are encoded as an RLP list of all their encoded
+//结构值被编码为所有编码的RLP列表
 // public fields. Recursive struct types are supported.
+//公共领域。递归结构类型被支持。
 //
 // To encode slices and arrays, the elements are encoded as an RLP
+//为了对片和数组进行编码，元素被编码为RLP
 // list of the value's elements. Note that arrays and slices with
+//值的元素列表。请注意数组和切片
 // element type uint8 or byte are always encoded as an RLP string.
+//元素类型uint8或字节总是被编码为RLP字符串。
 //
 // A Go string is encoded as an RLP string.
+// Go字符串被编码为RLP字符串。
 //
 // An unsigned integer value is encoded as an RLP string. Zero always
+//无符号整数值被编码为RLP字符串。总是零
 // encodes as an empty RLP string. Encode also supports *big.Int.
+//编码为一个空的RLP字符串。编码也支持* big.Int。
 //
 // An interface value encodes as the value contained in the interface.
+//接口值编码为界面中包含的值。
 //
 // Boolean values are not supported, nor are signed integers, floating
+//不支持布尔值，也不支持浮点型符号整数
 // point numbers, maps, channels and functions.
+//点号，地图，频道和功能。
+
 func Encode(w io.Writer, val interface{}) error {
+
+	// 然后定义了一个最重要的方法， 大部分的EncodeRLP方法都是直接调用了这个方法Encode方法。
+	// 这个方法首先获取了一个encbuf对象。 然后调用这个对象的encode方法。
+	// encode方法中，首先获取了对象的反射类型，根据反射类型获取它的编码器，然后调用编码器的writer方法。
+	// 这个就跟上面谈到的typecache联系到一起了。
 	if outer, ok := w.(*encbuf); ok {
 		// Encode was called by some type's EncodeRLP.
 		// Avoid copying by writing to the outer encbuf directly.
@@ -118,17 +164,27 @@ func EncodeToReader(val interface{}) (size int, r io.Reader, err error) {
 	return eb.size(), &encReader{buf: eb}, nil
 }
 
+// encbuf是encode buffer的简写(我猜的)。
+// encbuf出现在Encode方法，和很多Writer方法中。
+// 顾名思义，这个是在encode的过程中充当buffer的作用。
 type encbuf struct {
-	str     []byte      // string data, contains everything except list headers
-	lheads  []*listhead // all list headers
-	lhsize  int         // sum of sizes of all encoded list headers
-	sizebuf []byte      // 9-byte auxiliary buffer for uint encoding
+	str     []byte      // string data, contains everything except list headers 字符串数据，包含除列表标题外的所有内容
+	lheads  []*listhead // all list headers 所有列表标题
+	lhsize  int         // sum of sizes of all encoded list headers 所有编码列表标题的大小总和
+	sizebuf []byte      // 9-byte auxiliary buffer for uint encoding 用于uint编码的9字节辅助缓冲区
 }
 
+// 从注释可以看到， str字段包含了所有的内容，除了列表的头部。
+// 列表的头部记录在lheads字段中。
+// lhsize字段记录了lheads的长度， sizebuf是9个字节大小的辅助buffer，专门用来处理uint的编码的。
+// listhead由两个字段组成， offset字段记录了列表数据在str字段的哪个位置， size字段记录了包含列表头的编码后的数据的总长度。
+
 type listhead struct {
-	offset int // index of this header in string data
-	size   int // total size of encoded data (including list headers)
+	offset int // index of this header in string data 字符串数据中该头的索引
+	size   int // total size of encoded data (including list headers) 编码数据的总大小（包括列表标题）
 }
+
+
 
 // encode writes head to the given buffer, which must be at least
 // 9 bytes long. It returns the encoded bytes.
@@ -158,7 +214,7 @@ func puthead(buf []byte, smalltag, largetag byte, size uint64) int {
 	}
 }
 
-// encbufs are pooled.
+// encbufs are pooled. encbufs汇集。
 var encbufPool = sync.Pool{
 	New: func() interface{} { return &encbuf{sizebuf: make([]byte, 9)} },
 }
@@ -180,6 +236,7 @@ func (w *encbuf) Write(b []byte) (int, error) {
 }
 
 func (w *encbuf) encode(val interface{}) error {
+	// 首先获取了对象的反射类型，根据反射类型获取它的编码器，然后调用编码器的writer方法。
 	rval := reflect.ValueOf(val)
 	ti, err := cachedTypeInfo(rval.Type(), tags{})
 	if err != nil {
@@ -228,6 +285,7 @@ func (w *encbuf) size() int {
 	return len(w.str) + w.lhsize
 }
 
+// 然后我们可以看看encbuf最后的处理逻辑，会对listhead进行处理，组装成完整的RLP数据
 func (w *encbuf) toBytes() []byte {
 	out := make([]byte, w.size())
 	strpos := 0
@@ -405,6 +463,7 @@ func writeUint(val reflect.Value, w *encbuf) error {
 	return nil
 }
 
+// 就是根据黄皮书针把每种不同的数据填充到encbuf里面去。
 func writeBool(val reflect.Value, w *encbuf) error {
 	if val.Bool() {
 		w.str = append(w.str, 0x01)
@@ -526,6 +585,8 @@ func makeSliceWriter(typ reflect.Type, ts tags) (writer, error) {
 	return writer, nil
 }
 
+// 对于普通的类型，比如字符串，整形，bool型等数据，就是直接往str字段里面填充就行了。
+// 但是对于结构体类型的处理， 就需要特殊的处理方式了。
 func makeStructWriter(typ reflect.Type) (writer, error) {
 	fields, err := structFields(typ)
 	if err != nil {
@@ -533,6 +594,7 @@ func makeStructWriter(typ reflect.Type) (writer, error) {
 	}
 	writer := func(val reflect.Value, w *encbuf) error {
 		lh := w.list()
+		// f是field结构， f.info是typeinfo的指针， 所以这里其实是调用字段的编码器方法。
 		for _, f := range fields {
 			if err := f.info.writer(val.Field(f.index), w); err != nil {
 				return err
@@ -542,6 +604,10 @@ func makeStructWriter(typ reflect.Type) (writer, error) {
 		return nil
 	}
 	return writer, nil
+	// 可以看到上面的代码中体现了处理结构体数据的特殊处理方法，就是首先调用w.list()方法，处理完毕之后再调用listEnd(lh)方法。
+	// 采用这种方式的原因是我们在刚开始处理结构体的时候，并不知道处理后的结构体的长度有多长，
+	// 因为需要根据结构体的长度来决定头的处理方式(回忆一下黄皮书里面结构体的处理方式)，
+	// 所以我们在处理前记录好str的位置，然后开始处理每个字段，处理完之后在看一下str的数据增加了多少就知道处理后的结构体长度有多长了。
 }
 
 func makePtrWriter(typ reflect.Type) (writer, error) {

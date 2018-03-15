@@ -30,4 +30,24 @@ RLP values are distinguished by a type tag. The type tag precedes the
 value in the input stream and defines the size and kind of the bytes
 that follow.
 */
+
+/*
+包rlp实现RLP序列化格式。
+
+RLP（递归线性前缀）的目的是任意编码
+嵌套的二进制数据数组，而RLP是使用的主要编码方法
+在Ethereum中序列化对象。 RLP的唯一目的是编码
+结构体; 编码特定的原子数据类型（例如，字符串，整数，
+浮动）是由高阶协议决定的; 在以太坊整数
+必须以大端二进制形式表示，且不含前导零
+（从而使整数值零等于空字节
+数组）。
+
+RLP值由类型标记区分。 类型标签在之前
+输入流中的值并定义字节的大小和种类
+随后。
+*/
+
+// 文档代码
+
 package rlp
